@@ -1,0 +1,169 @@
+/* Ejemplo de comunicación WebSocket Servidor <---> Cliente. Escrito por Jefferson Cartagena No www.esploradores.com
+Este sofware está escrito bajo la licencia CREATIVE COMMONS con Reconocimiento-CompartirIgual(CC BY-SA) https://creativecommons.org/
+-Redistributions of source code must retain the above creative commons and this list of conditions and the following disclaimer.
+-Redistributions in binary form must reproduce the above creative commons notice, this list of conditions and the following disclaimer in
+the documentation and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
+COPYRIGHTHOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES INCLUDING, 
+BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+#include <ESP8266WiFi.h> // Incluye una librería externa para gestionar la conexión WiFi
+#include <WebSocketsServer.h> // Incluye una librería externa para gestionar la conexión WebSocket
+#include <ESP8266WebServer.h> // Incluye una librería externa para facilitar la gestión del servidor
+#define analog_ip A0 //-analog_ip- Nombre del pin analógico (A0) de entrada de datos -analog input-
+long brillo;
+int led0=16;
+int led1=5;
+int led2=4;
+int pot=0;
+static unsigned long last; //-last- Variable para almacenar el tiempo (ms) que lleva el procesador encendido
+int inputVal; //-inputVal- Variable para almacenar el último valor leído en la entrada analógica
+float voltVal; //-voltVal- Variable para almacenar el voltaje (calculado a partir de inputVal)
+float voltValPrev = 0 ; //-VoltValPrev- Variable para almacenar el voltaje tomado en la lectura previa 
+String myString; //-myString- Variable para almacenar el voltaje convertido a cadena de texto
+const char* ssid = "INNO_CARTAGENA"; //Nombre de la red -SSID- (Access Point) que vamos a crear
+const char* password = "Carta1996"; //Clave de la red -PASSWORD-
+static const char INDEX_HTML[] PROGMEM = R"( <!--Documento HTML para almacenar en la memoria flash (En la variable INDEX_HTML)-->
+<!DOCTYPE html> <!--Declaración del tipo de documento: HTML5-->
+<html> <!--Inicio del documento HTML-->
+<head> <!--Inicio de la cabecera -inf.sobre el doc.-->
+<meta charset=utf-8> <!--Config. de carácteres utilizada: UTF-8-->
+<meta name='viewport' content='initial-scale=1, maximum-scale=1'> <!--Control de la composición del documento
+(hace que se muestre similar en distintos
+dispositivos y navegadores)-->
+<title>WebSocket ESP8266 - POTENCIOMETRO</title> <!--Título del documento -->
+</head> <!--Fin de la cabecera -->
+<body> <!--Inicio el cuerpo -contenido visible del doc.-->
+<h1>LECTURA DE UN POTENCIÓMETRO</h1> <!--Texto de enabezado -título principal (h1)-->
+<p>Comunicación vía WebSocket: Servidor (ESP8266) <---> Cliente</p> <!--Párrafo-->
+<canvas id="myCanvas" width="350" height="350" style="border:1px solid #d3d3d3;"> <!--Área de dibujo (canvas) de 350x350px. con-->
+Tu navegador no soporta el elemento CANVAS de HTML5.</canvas> <!--borde de 1px gris. Nombre de ID: 'myCanvas' -->
+<!--Si es incompat. con nav.se muestra msg.error-->
+<script> //Inicio del JavaScript -programación del docum.-
+var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']); /*Crea un WebSocket conectándose con el servidor
+ws://[IP del servidor]:81/ con el protocolo
+de 'arduino'*/
+connection.onopen = function () { //Al abrir la conexión...
+connection.send('Conectado - ' + new Date()); //...envía 'Conectado' + fecha y hora al servidor
+console.log('Conectado - ' + new Date()); //...envía 'Conectado' + fecha y hora a la consola
+}
+connection.onmessage = function (event) { //Al recibir un msg...(voltaje leído por ESP8266)
+console.log('Servidor (recibe): ', event.data); //...envía 'Serv. (recibe):'+ mensaje a la consola
+verValor(); //...ejecuta la función verValor()
+}
+connection.onerror = function (error) { //Si hay un error en la conexión...
+console.log('WebSocket Error!!!', error); //...envía 'WS Error!!!'+tipo de error a la consola
+}
+function verValor() { //Declara la función verValor() Cuando se ejecuta:
+var valor = event.data; //Asigna a la variable local valor el msg.recibido
+var c = document.getElementById('myCanvas'); //Crea el nodo DOM para el elemento c (canvas)
+var ctx = c.getContext('2d'); //Establece el contexto de representación (2D)
+ctx.clearRect(0, 0, myCanvas.width, myCanvas.height); //Limpia el canvas (para evitar superposiciones)
+ctx.beginPath(); //Comienza un nuevo trazado (una parte del dibujo)
+ctx.lineWidth = 40; //Anchura de los trazos: 40 pixels
+ctx.strokeStyle = '#EEEEEE'; //Color de los trazos: gris claro
+ctx.arc(175,175,100,0.75*Math.PI,0.25*Math.PI); /*Trazo: arco con centro (175,175), radio 100px
+y ángulo de giro entre 0.75π y 0.25π rad*/
+ctx.stroke(); //Representa en pantalla el trazado
+ctx.beginPath(); //Comienza un nuevo trazado
+ctx.strokeStyle = '#87CEEB'; //Color de los trazos: azul cielo (sky blue)
+ctx.arc(175,175,100,(0.25-(1.5/3.3)*valor)*Math.PI,0.25*Math.PI); /*Trazo: arco con centro (175,175), radio 100px
+y ángulo de giro proporcional al voltaje medido
+3.3V serán 1.5π rad.El arco termina en 0.25π rad*/
+ctx.stroke(); //Representa en pantalla el trazado
+ctx.font = 'bold 40px Arial'; //Fuente de texto: arial, 40 px negrilla
+ctx.fillStyle = '#87CEEB'; //Color de texto: azul cielo
+ctx.textAlign = 'center'; //Posición de texto: centrado
+ctx.fillText(valor+"V",175, 185); //Texto a representar: mensaje+V. Centro (175,185)
+}
+</script> <!--Fin del JavaScrip-->
+</body> <!--Fin del cuerpo-->
+</html> <!--Fin del documento HTML-->
+)";
+ESP8266WebServer server (80); //Puerto de conex. del Servidor (Access Point) nº80
+WebSocketsServer webSocket = WebSocketsServer(81); //Puerto de conex. del WebSocket nº81
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) { /*Declara la función webSocketEvent para gestionar
+los 'eventos' relativos a la conexión WebSocket*/
+switch(type) { //SI EL 'EVENTO' ES...
+case WStype_CONNECTED: { //...UNA NUEVA CONEXIÓN WEBSOCKET CON UN CLIENTE:
+IPAddress ip = webSocket.remoteIP(num); /*Asigna a la variable ip la dirección IP
+de la conexión y el nº de conexión del WS*/
+Serial.printf("[%u] Conectado a través de la URL: %d.%d.%d.%d - %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+//Envía al Mon. Serie el nº de conex. y direcc. IP 
+myString = String(voltVal); //Convierte el voltaje medido en una cadena de txt.
+webSocket.sendTXT(num,myString); //Envía la cadena de texto al nuevo cliente
+} 
+break; //Finaliza el evento
+case WStype_DISCONNECTED: //...EL CESE DE UNA CONEXIÓN WEBSOCKET:
+Serial.printf("[%u] Desconectado!\n", num); //Envía al Mon.Serie el msg. con nº WS desconectado
+break; //Finaliza el evento
+case WStype_TEXT: //...UN MENSAJE DE TEXTO RECIBIDO POR LA CONEX. WS:
+Serial.printf("Número de conexión: %u - Carácteres recibidos: %s\n ", num, payload);
+//Envía al Mon. Serie el msg. con nº WS de origen
+break; //Finaliza el evento
+case WStype_ERROR: //...UN ERROR EN LA CONEXIÓN WEBSOCKET
+Serial.printf("Se ha recibido un error. \n"); //Envía al Monitor Serie el mensaje de error
+break; //Finaliza el evento
+}
+}
+void setup() { //Declara la func. SETUP -Configuración inicial del sketch-
+pinMode(16,OUTPUT);//SE DECLARA LOS PINES COMO SALIDA
+pinMode(5,OUTPUT);//SE DECLARA LOS PINES COMO SALIDA
+pinMode(4,OUTPUT);//SE DECLARA LOS PINES COMO SALIDA
+
+Serial.begin(115200); //Velocidad del Puerto Serie en baudios (115200)
+Serial.println(); //Salto de línea en el Puerto Serie
+WiFi.softAP(ssid, password); //Inicializa la conexión WiFi -Access Point- (AP)
+IPAddress myIP = WiFi.softAPIP(); //Asigna a la variable myIP la dirección IP del AP 
+Serial.print("IP del access point: "); //Envía al Monitor Serie el texto
+Serial.println(myIP); //Envía al Monitor Serie el la dirección IP del AP
+webSocket.begin(); //Inicializa la conexión WebSocket
+webSocket.onEvent(webSocketEvent); /*Cuando se recibe un 'evento' relativo al WS
+se ejecuta la función webSocketEvent para su gestión*/
+server.on("/", []() { //Si el servidor recibe la dirección IP del AP (myIP) desde un cliente...
+server.send_P(200, "text/html", INDEX_HTML); //...envía la página WEB almacenada en la memoria flash al cliente
+});
+server.begin(); //Inicializa el servidor
+Serial.println("WebServer iniciado..."); //Envía al Monitor Serie el texto 
+}
+void loop() { //Declara la func. LOOP -Funciones del sketch que se repiten indefinidamente-
+brillo = analogRead(pot);//A0 COMO PIN DE VOLATJE O POTENCIOMETRO
+if(brillo >=0 && brillo <=250)// ENCENDIDO PIN D0
+{
+digitalWrite(16, HIGH);
+digitalWrite(5, LOW);
+digitalWrite(4, LOW);
+}
+if(brillo >=250 && brillo <=875)// ENCENDIDO PIN D1
+{
+digitalWrite(16, LOW);
+digitalWrite(5, HIGH);
+digitalWrite(4, LOW);
+}
+if(brillo >=875 && brillo <=1023)// ENCENDIDO PIN D2
+{
+digitalWrite(16,LOW );
+digitalWrite(5, LOW);
+digitalWrite(4, HIGH);
+}
+
+webSocket.loop(); //El servidor 'escucha' los 'eventos' de la conexión WebSocket
+server.handleClient(); /*El servidor 'escucha' las peticiones entrantes de los clientes. Conforme a lo 
+programado solo puede responder a la petición de la página WEB almacenada*/
+//if (abs(millis()-last) > 100) { //Cada 100 ms (0,1s)... 
+inputVal = analogRead (analog_ip); //...se realiza la lectura del pin analógico. Da valores entre 0 y 1023 (10 bits)
+voltVal = 0.01*(round(inputVal*3.30/1023*100)); /*...se mapea el resultado entre 0 y 3.30 para obtener el voltaje que deja pasar
+el potenciómetro y se redondea a dos decimales*/
+//last = millis(); //...se toma el tiempo de referencia para volver a ejecutar esta func. condicional
+//}
+delay(100);
+if (voltVal != voltValPrev) { //Si el voltaje ha cambiado respecto a la lectura previa...
+Serial.println (voltVal); //...envía al Monitor Serie el nuevo voltaje
+myString = String(voltVal); //...convierte el voltaje de nº(float) a cadena de texto (String) 
+webSocket.broadcastTXT(myString); //...envía el voltaje como txt. a todos los dispositivos conectados vía WebSocket
+voltValPrev = voltVal; //...se toma el voltaje de referencia para volver a ejecutar esta func. condicional
+}
+}
